@@ -1,0 +1,48 @@
+volumes:
+  db:
+    driver: local
+  pgadmin:
+    driver: local
+    
+services:
+  db:
+    image: postgres:16.4
+    restart: unless-stopped
+    expose:
+      - S{WSRS_DATABASE_PORT:-5432}
+    # env_file:
+    #   - src/.env
+    environment:
+      POSTGRES_USER: ${WSRS_DATABASE_USER}
+      POSTGRES_PASSWORD: ${WSRS_DATABASE_PASSWORD}
+      POSTGRES_DB: ${WSRS_DATABASE_NAME}
+    volumes:
+      - db:/var/lib/postgresql/data
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - 8081:80
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: password
+    volumes:
+      - pgadmin:/var/lib/pgadmin
+
+  backend:
+    build:
+      context: .
+    container_name: backend
+    user: nonroot
+    depends_on:
+      - db
+    links:
+      - db
+    volumes:
+      - ./src:/home/nonroot/app
+    # expose:
+    #   - 8080
+    ports:
+      - 8080:8080
