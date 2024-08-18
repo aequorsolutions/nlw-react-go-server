@@ -3,8 +3,10 @@ package api
 import (
 	"backend-go-chat-websocket/internal/store/pgstore"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -189,7 +191,7 @@ func (h apiHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 func (h apiHandler) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	type _body struct {
 		Theme  string `json:"theme"`
-		Secret string `json:"-"`
+		Secret string `json:"secret"`
 	}
 	var body _body
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -472,7 +474,28 @@ func (h apiHandler) handleDeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.q.DeleteRoomMessages(r.Context(), roomID)
+	secret, err := h.q.GetRoomSecret(r.Context(), roomID)
+	if err != nil {
+		return
+	}
+
+	type _body struct {
+		Secret string `json:"secret"`
+	}
+	var body _body
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	fmt.Println("Raw Secret:", body.Secret)
+	fmt.Println("Database Secret:", secret)
+
+	if subtle.ConstantTimeCompare([]byte(body.Secret), []byte(secret)) == 0 {
+		http.Error(w, "invalid secret", http.StatusBadRequest)
+		return
+	}
+
+	err = h.q.DeleteRoomMessages(r.Context(), roomID)
 	if err != nil {
 		return
 	}
